@@ -15,7 +15,7 @@ from openbabel import pybel
 from cg_compound import CG_Compound
 
 
-def draw_scene(comp, color="cpk", scale=1.0, show_box=False, show_atomistic=False):
+def draw_scene(comp, color="cpk", scale=1.0, cg_scale=4.0, show_box=False, show_atomistic=False):
     """
     Visualize a CG_Compound using fresnel.
 
@@ -24,6 +24,7 @@ def draw_scene(comp, color="cpk", scale=1.0, show_box=False, show_atomistic=Fals
     comp : (CG_Compound), compound to visualize
     color : ("cpk" or the name of a matplotlib colormap), color scheme to use (default "cpk")
     scale : (float), scaling factor for the particle, bond, and box radii (default 1.0)
+    cg_scale : (float), scaling factor for the coarse particle radii (default 4.0)
     show_box : (bool), whether or not to visualize the box. (default False)
         The function will first check if the user has assigned a box to comp.box, if not,
         then it will use comp.boundingbox
@@ -40,9 +41,12 @@ def draw_scene(comp, color="cpk", scale=1.0, show_box=False, show_atomistic=Fals
     particle_names = [p.name for p in comp.particles()]
 
     # all_bonds.shape is (nbond, 2 ends, xyz)
-    all_bonds = np.stack([np.stack((i[0].pos, i[1].pos)) for i in comp.bonds()])
+    if comp.n_bonds > 0:
+        all_bonds = np.stack([
+            np.stack((i[0].pos, i[1].pos)) for i in comp.bonds()
+            ])
 
-    N_bonds = all_bonds.shape[0]
+    N_bonds = comp.n_bonds
 
     color_array = np.empty((N, 3), dtype="float64")
     if color == "cpk":
@@ -79,7 +83,7 @@ def draw_scene(comp, color="cpk", scale=1.0, show_box=False, show_atomistic=Fals
     if not hasattr(comp, "atomistic") or comp.atomistic is None:
         scale_coarse = 1
     else:
-        scale_coarse = 3
+        scale_coarse = cg_scale
 
     # Make an array of the radii based on particle name
     # -- if name is not defined in the dictionary, use default
@@ -107,26 +111,29 @@ def draw_scene(comp, color="cpk", scale=1.0, show_box=False, show_atomistic=Fals
     beads.radius[:] = rad_array
 
     # bonds
-    bonds = fresnel.geometry.Cylinder(scene, N=N_bonds)
-    bonds.material = fresnel.material.Material(roughness=0.5)
+    if N_bonds > 0:
+        bonds = fresnel.geometry.Cylinder(scene, N=N_bonds)
+        bonds.material = fresnel.material.Material(roughness=0.5)
 
-    # It looks better to not have the bonds outlined with the transparent beads
-    if not hasattr(comp, "atomistic") or comp.atomistic is None:
-        bonds.outline_width = 0.01 * scale
+        # It looks better to not outline bond when using transparent beads
+        if not hasattr(comp, "atomistic") or comp.atomistic is None:
+            bonds.outline_width = 0.01 * scale
 
-        # bonds are white
-        bond_colors = np.ones((N_bonds, 3), dtype="float64")
+            # bonds are white
+            bond_colors = np.ones((N_bonds, 3), dtype="float64")
 
-    # bonds are grey
-    bond_colors = np.ones((N_bonds, 3), dtype="float64") * 0.5
+        # bonds are grey
+        bond_colors = np.ones((N_bonds, 3), dtype="float64") * 0.5
 
-    bonds.material.primitive_color_mix = 1.0
-    bonds.points[:] = all_bonds
+        bonds.material.primitive_color_mix = 1.0
+        bonds.points[:] = all_bonds
 
-    bonds.color[:] = np.stack(
-        [fresnel.color.linear(bond_colors), fresnel.color.linear(bond_colors)], axis=1
-    )
-    bonds.radius[:] = [0.03 * scale] * N_bonds
+        bonds.color[:] = np.stack([
+            fresnel.color.linear(bond_colors),
+            fresnel.color.linear(bond_colors)
+            ], axis=1
+        )
+        bonds.radius[:] = [0.03 * scale] * N_bonds
 
     if show_box:
         # Use comp.box, unless it does not exist, then use comp.boundingbox
@@ -139,7 +146,8 @@ def draw_scene(comp, color="cpk", scale=1.0, show_box=False, show_atomistic=Fals
 
     if show_atomistic:
         beads.material.spec_trans = 1.0
-        bonds.material.spec_trans = 1.0
+        if N_bonds > 0:
+            bonds.material.spec_trans = 1.0
         try:
             N_atoms = comp.atomistic.n_particles
             atom_names = [p.name for p in comp.atomistic.particles()]
