@@ -198,7 +198,7 @@ def visualize(comp, color="cpk", scale=1.0, box=None):
         # if there are more unique particle names than colors, colors will be reused
         unique_names = list(set(particle_names))
         for i, n in enumerate(particle_names):
-            color_array[i, :] = bsu_colors[uniq_atoms.index(n) % len(bsu_colors)]
+            color_array[i, :] = bsu_colors[unique_names.index(n) % len(bsu_colors)]
     else:
         # Populate the color_array with colors based on particle name
         # choose colors evenly distributed through a matplotlib colormap
