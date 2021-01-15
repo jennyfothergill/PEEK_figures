@@ -752,7 +752,7 @@ def coarse(mol, bead_list):
 
     cg_compound.atomistic = comp
 
-    return cg_compound
+    return cg_compound, bead_inds
 
 
 # features SMARTS
